@@ -278,7 +278,7 @@ timeout 15s qemu-system-riscv64 -machine virt -nographic -bios default -kernel b
 | 两个模块单独编译 | `pmm.o` 与 `best_fit_pmm.o` 均成功 | [实验记录](../实验记录.md)；本次截图没有单独显示这两条命令 |
 | 全量构建 | 生成 `bin/kernel`、`bin/ucore.img` | 图 9 |
 | QEMU 自检 | 读取 128 MB RAM，选择 Best-Fit，打印自检成功 | 图 10 |
-| SLUB 自检 | 默认 Best-Fit 与可选 Buddy 两种构建均打印 `slub_check() succeeded!` | 本次 WSL/QEMU 终端输出；原有截图未包含 SLUB |
+| Buddy 与 SLUB 扩展自检 | Buddy 构建打印 `buddy_check() succeeded!` 与 `slub_check() succeeded!`；默认 Best-Fit 构建也通过 SLUB 自检 | 图 12；默认构建的本机终端输出 |
 | 本地评分 | Page Init 与 Best-Fit 均为 `OK`，20/20 | 图 11 |
 
 ### 5.2 QEMU 启动与自检
@@ -321,7 +321,32 @@ Total Score: 20/20
 
 图 11：执行 `make grade` 后，Page Init 和 Best-Fit 两项均为 `OK`，总分为 `20/20`。
 
-### 5.4 失败定位及修复
+### 5.4 Buddy 与 SLUB 的独立演示
+
+演示时先指向 `pmm.c` 中的 `USE_BUDDY_PMM` 管理器选择，再展示 `buddy_pmm.c` 的分阶空闲链表、按伙伴地址异或寻找并合并，以及 `buddy_check()` 的拆分和回收断言。接着指向 `init.c` 中的 `slub_init()`、`slub_check()` 调用，展示 `slub.c` 中的小对象大小类、页内空闲槽与位图、大对象连续页回退。SLUB 是物理页管理器之上的对象分配层，选用 Buddy 时两者可以在同一次启动中验证。
+
+在 WSL 的 `code/` 目录执行：
+
+```bash
+make clean
+make -j2 DEFS=-DUSE_BUDDY_PMM
+timeout 15s qemu-system-riscv64 -machine virt -nographic -bios default -kernel bin/ucore.img
+```
+
+应重点展示以下四行；截图中的 `satp` 地址随构建变化，不作为固定检查值：
+
+```text
+memory management: buddy_pmm_manager
+buddy_check() succeeded!
+check_alloc_page() succeeded!
+slub_check() succeeded!
+```
+
+![Buddy 与 SLUB 在同一次 QEMU 启动中通过自检](./images/9-buddy-slub.png)
+
+图 12：Buddy 被选为底层页分配器，Buddy 与 SLUB 自检均通过。最后的 `terminating on signal 15 ... (timeout)` 是演示命令到时终止常驻的 QEMU，不是内核断言失败。该图证明这次启动的自检路径成功，不能替代对所有输入、并发或性能的测试。`make grade` 仍只计 Page Init 与 Best-Fit，需切回默认构建后单独展示其 20/20 结果。
+
+### 5.5 失败定位及修复
 
 | 阶段 | 实际现象 | 定位与处理 |
 | --- | --- | --- |
@@ -332,7 +357,7 @@ Total Score: 20/20
 
 这里的“轨迹停在 `csrw satp`”是 QEMU 指令轨迹的观察；“低地址缺少映射导致后续取指失败”是结合页表内容作出的判断。改动后的启动输出和评分结果提供了修复有效的运行证据。
 
-本报告已附用户保存的 11 张源码与终端截图。截图与操作步骤的对应关系见[本机操作与人工截图指南](./操作步骤与截图说明.md)；各成员的个人操作和截图归属仍需按实际情况确认。
+本报告已附用户保存的 12 张源码与终端截图。截图与操作步骤的对应关系见[本机操作与人工截图指南](./操作步骤与截图说明.md)；各成员的个人操作和截图归属仍需按实际情况确认。
 
 ---
 

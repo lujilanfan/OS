@@ -12,5 +12,6 @@
 | `6.1.png`、`6.2.png`、`6.3.png` | 启动页表、映射和 QEMU 装载参数 |
 | `7.png` | QEMU 自检输出 |
 | `8.png` | `make grade` 结果 |
+| `9-buddy-slub.png` | Buddy 与 SLUB 在同一次 QEMU 启动中通过自检 |
 
 图片证明画面中实际可见的内容；个人操作归属需由小组按实际情况确认。
