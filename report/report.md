@@ -1,6 +1,6 @@
 # 操作系统实验报告
 
-> 当前状态：物理页初始化、Best-Fit 分配器和本机 QEMU 启动适配已完成；`make grade` 的 Page Init 与 Best-Fit 两项均为 OK，总分 20/20。依据现行指导书补充了 First-Fit 思考题、Best-Fit 改进分析及 Buddy 的设计提示词和测试方案。Buddy 模块及其测试尚未生成、集成或运行；20/20 不代表指导书全部任务通过。以下执行记录来自本工作环境，不表示三名组员分别在各自电脑上完成了相同操作。
+> 当前状态：物理页初始化、Best-Fit 分配器、Buddy System 分配器和本机 QEMU 启动适配已完成；`make grade` 的 Page Init 与 Best-Fit 两项均为 OK，总分 20/20。Buddy 有独立的内核自检；评分脚本不评分 Buddy。以下执行记录来自本工作环境，不表示三名组员分别在各自电脑上完成了相同操作。
 
 ## 实验基本信息
 
@@ -97,9 +97,9 @@ check_alloc_page：执行 best_fit_check 的断言自检
 
 | 练习 | 本报告采用的规格（spec） | 提示词与实际状态 |
 | --- | --- | --- |
-| 分配任务一：First-Fit 思考题 | 解释四个核心函数、块首元数据、分配与合并，并分析改进空间 | [`prompt.md` 任务一](./prompt.md#任务一first-fit-阅读提示词事后拟写)为事后拟写；本报告给出源码分析。 |
-| 分配任务二：Best-Fit | 符合 `pmm_manager` 接口、选最小可用块、拆分、地址有序释放与双向合并，保留原检查函数 | [`prompt.md` 任务二](./prompt.md#任务二best-fit-实现提示词事后拟写)为事后拟写；当前代码和本地评分已验证。 |
-| 分配任务三：Buddy System | 生成独立管理器和测试，按二次幂拆分与真正伙伴合并，能编译运行 | [`prompt.md` 任务三 A/B](./prompt.md#任务三buddy-system-实现与测试提示词事后拟写)均为事后拟写；没有实现和运行结果。 |
+| 分配任务一：First-Fit 思考题 | 解释四个核心函数、块首元数据、分配与合并，并分析改进空间 | [`prompt.md` 任务一](./prompt.md#任务一first-fit-阅读提示词)为事后拟写；本报告给出源码分析。 |
+| 分配任务二：Best-Fit | 符合 `pmm_manager` 接口、选最小可用块、拆分、地址有序释放与双向合并，保留原检查函数 | [`prompt.md` 任务二](./prompt.md#任务二best-fit-实现提示词)为事后拟写；当前代码和本地评分已验证。 |
+| 分配任务三：Buddy System | 生成独立管理器和测试，按二次幂拆分与真正伙伴合并，能编译运行 | [`prompt.md` 任务三 A/B](./prompt.md#任务三buddy-system-实现与测试提示词)为整理后的示例；`buddy_pmm.c` 已实现并通过独立 QEMU 自检。 |
 
 此表把**拟写的 prompt**与**实际实现证据**分开；不能把事后设计稿写成当时发送给 AI 的原始消息。
 
@@ -131,7 +131,7 @@ free_end = ROUNDDOWN(mem_base + mem_size, PGSIZE)
 
 ### 分配任务一（思考题）：理解 First-Fit
 
-**对应源码：**[`code/kern/mm/default_pmm.c`](../code/kern/mm/default_pmm.c)。本节是对框架中已有算法的阅读分析，没有把它说成新编写的代码。用于引导阅读的拟写提示词见 [`prompt.md` 的任务一](./prompt.md#任务一first-fit-阅读提示词事后拟写)。
+**对应源码：**[`code/kern/mm/default_pmm.c`](../code/kern/mm/default_pmm.c)。本节是对框架中已有算法的阅读分析，没有把它说成新编写的代码。用于引导阅读的拟写提示词见 [`prompt.md` 的任务一](./prompt.md#任务一first-fit-阅读提示词)。
 
 `default_init()` 将循环双向链表头初始化为空，并把空闲页计数 `nr_free` 设为零。`default_init_memmap(base, n)` 检查这 `n` 个页描述符原本处于保留状态，清理标志与引用计数，把块首页面的 `property` 设为 `n`、标记 `PG_property`，按地址顺序将块首挂入链表，并增加 `nr_free`。链表节点代表**连续空闲块的起始页**，不是每个空闲页都各挂一个节点。
 
@@ -163,13 +163,13 @@ free_end = ROUNDDOWN(mem_base + mem_size, PGSIZE)
 
 `best_fit_pmm_manager` 填齐六个管理器回调，`pmm.c` 将其设为当前管理器。框架原有的 `basic_check()`、`best_fit_check()` 保持不变。自检覆盖基础分配、空链表、不同大小块的选择、释放后的合并和空闲页计数等行为。
 
-**实现约束与提示词：**保留两个检查函数，补齐 `pmm_manager` 回调；空闲块按地址排列，分配时遍历并选能容纳请求的最小块。事后按这些约束整理的可复用提示词见 [`prompt.md` 的任务二](./prompt.md#任务二best-fit-实现提示词事后拟写)；它不是本次已发生对话的逐字提示词。
+**实现约束与提示词：**保留两个检查函数，补齐 `pmm_manager` 回调；空闲块按地址排列，分配时遍历并选能容纳请求的最小块。事后按这些约束整理的可复用提示词见 [`prompt.md` 的任务二](./prompt.md#任务二best-fit-实现提示词)；它不是本次已发生对话的逐字提示词。
 
 **改进空间：**当前实现每次分配最坏扫描全部空闲块，复杂度为 `O(k)`（`k` 为空闲块数）。可以增设按块大小排序的索引以更快找到最小可用块，同时保留地址顺序以合并邻块；但双索引会增加空间和维护复杂度。Best-Fit 也可能留下难以再利用的小碎块，可用分级尺寸、最小拆分阈值等方法权衡碎片与搜索成本，效果应通过实际负载测试，而非只凭本实验断言判断。
 
-### 分配任务三：Buddy System 设计与测试方案
+### 分配任务三：Buddy System 实现与测试
 
-指导书将 Buddy System 列为分配任务三，要求两份提示词：一份生成并接入分配器，另一份生成测试。可复用的**事后拟写示例**分别见 [`prompt.md` 的任务三 A、B](./prompt.md#任务三buddy-system-实现与测试提示词事后拟写)。当前仓库没有 Buddy 分配器或对应测试，也没有 Buddy 的编译、QEMU 和断言运行结果；下面只说明待实现的规格与测试设计，不能写作完成记录。
+指导书将 Buddy System 列为分配任务三，要求两份提示词：一份生成并接入分配器，另一份生成测试。整理后的示例分别见 [`prompt.md` 的任务三 A、B](./prompt.md#任务三buddy-system-实现与测试提示词)。实际实现位于 [`buddy_pmm.c`](../code/kern/mm/buddy_pmm.c)，通过 `USE_BUDDY_PMM` 编译开关在 `pmm.c` 中选择，默认仍使用 Best-Fit。
 
 模块规格是按 `2^order` 个页管理空闲块。申请 `n` 页时，找到能容纳它的最小阶块，必要时逐级拆成两个等大的伙伴；释放时计算同阶伙伴位置，仅当伙伴确实空闲且属于同一管理区间时逐级合并。设备树给出的可用区未必天然是一个对齐的 `2^order` 块，初始化需要拆成若干边界合法的块。`pmm_manager` 接口应明确返回整块的语义及实际占用页数，避免按请求页数释放却无法正确回收整阶块。
 
@@ -182,7 +182,7 @@ free_end = ROUNDDOWN(mem_base + mem_size, PGSIZE)
 | 空闲页不足或虽有总量但无足够大的块 | 验证失败返回、无越界写入及计数保持不变。 |
 | 多轮分配与释放后恢复初始空闲页数 | 检验状态维护和重复使用的稳定性。 |
 
-这些用例目前只是测试方案，没有生成的测试代码或通过记录。扩展 Challenge 的 SLUB 对象分配器及其两份提示词也未实施，本报告不将其计入已完成部分。
+`buddy_check()` 已覆盖非二次幂且未对齐的 14 页初始化、跨阶申请、拆分、只有真正伙伴才能合并、空闲总量足够但没有足够大块时返回失败，以及释放后空闲页数恢复。重复释放、越界输入、并发和性能仍未在本次自检中覆盖。扩展 Challenge 的 SLUB 对象分配器及其两份提示词未实施，本报告不将其计入已完成部分。
 
 ### 启动兼容调整
 
@@ -212,6 +212,7 @@ free_end = ROUNDDOWN(mem_base + mem_size, PGSIZE)
 | `kern/driver/dtb.c` | 解析设备树内存节点 | 输出 128 MB RAM 范围 |
 | `kern/mm/pmm.c` | 建立描述符、标记保留页、选择分配器并启动自检 | 输出 `best_fit_pmm_manager` 与自检成功消息 |
 | `kern/mm/best_fit_pmm.c` | 管理空闲块、分配和回收连续物理页 | 自检断言全部通过 |
+| `kern/mm/buddy_pmm.c` | 按二次幂阶管理空闲块、拆分和伙伴合并 | 选择 Buddy 时独立自检通过 |
 | `tools/inject.py`、`tools/test_lab2.c`、`tools/grade.sh` | 在临时副本注入测试并核对输出 | 本地评分 20/20 |
 
 ---
@@ -230,6 +231,16 @@ make -j2
 timeout 5s make qemu
 make grade
 ```
+
+单独验证 Buddy 时先清理构建产物，再执行：
+
+```bash
+make clean
+make -j2 DEFS=-DUSE_BUDDY_PMM
+timeout 15s qemu-system-riscv64 -machine virt -nographic -bios default -kernel bin/ucore.img
+```
+
+关键输出为 `memory management: buddy_pmm_manager`、`buddy_check() succeeded!` 和 `check_alloc_page() succeeded!`。申请 `n` 页实际占用向上取整到 `2^order` 页，`nr_free_pages()` 按实际占用量减少；释放时应传入原请求页数，块首 `property` 记录实际阶块大小。切回默认 Best-Fit 时再次执行 `make clean && make -j2`。
 
 单文件编译与完整 `make -j2` 均成功，生成 `bin/kernel` 和 `bin/ucore.img`。`make grade` 会清理开发目录的构建产物，并在 `/tmp/lab2_grade` 临时副本中注入测试、重新构建和启动；评分后若要再次执行 `make qemu`，须重新构建。内核初始化后进入常驻循环，所以上面的 QEMU 命令由 `timeout` 在 5 秒后停止，其退出码 124 是预期的限时停止。
 
@@ -305,7 +316,7 @@ Total Score: 20/20
 1. **内存边界决定可分配范围。** 设备树给出 RAM 范围，链接符号 `end` 给出内核占用范围，页描述符数组还会消耗物理内存。只有这些区域之后的完整页才能加入空闲链表。
 2. **Best-Fit 依赖准确的块元数据。** 块首长度、空闲页计数和按地址排序的链表必须同步维护；拆分或合并后若有一项错误，后续分配可能重叠、遗漏或错误报告可用页数。
 3. **启动映射是内存管理的前提。** 内核尚未运行到 `page_init()` 时，页表切换和镜像装载就可能使执行中断。通过对照 OpenSBI 入口、QEMU 指令轨迹和页表内容，才能将启动故障与分配器故障区分开。
-4. **自检与评分各有边界。** 内核断言验证给定分配序列，评分脚本检查特定初始化状态和输出；20/20 表示这套本地检查通过，不包括指导书的 Buddy 任务，也不代表已经评估性能、并发访问或所有边界输入。
+4. **自检与评分各有边界。** 内核断言验证给定分配序列，评分脚本检查特定初始化状态和输出；20/20 表示原有 Page Init 与 Best-Fit 检查通过，Buddy 另由 QEMU 自检验证，不代表已经评估性能、并发访问或所有边界输入。
 
 ### AI 协作开发的经验
 
@@ -316,7 +327,7 @@ Total Score: 20/20
 - [x] `pmm.c` 选择 `best_fit_pmm_manager`；两个模块可以单独编译，完整内核可以构建。
 - [x] QEMU 启动并打印 `check_alloc_page() succeeded!`。
 - [x] 本地 `make grade` 的 Page Init 与 Best-Fit 均为 OK，总分 20/20。
-- [ ] 实现并运行 Buddy System 模块与测试；当前仅有事后拟写的提示词及测试方案。
+- [x] 实现并运行 Buddy System 模块与独立自检；评分脚本不包含 Buddy 项。
 - [ ] 小组核对成员信息、实际分工、个人操作和 AI 使用记录。
 - [x] 将现有真实源码与终端截图放入报告对应位置，并核对图片路径。
 - [ ] 若课程要求，补充完整对话导出、仓库提交号及指定模板内容；核对现有 `prompt.md` 的账号和模型信息。
