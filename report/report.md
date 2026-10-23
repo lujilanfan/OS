@@ -1,6 +1,6 @@
 # 操作系统实验报告
 
-> 当前状态：物理页初始化、Best-Fit 分配器、Buddy System 分配器和本机 QEMU 启动适配已完成；`make grade` 的 Page Init 与 Best-Fit 两项均为 OK，总分 20/20。Buddy 有独立的内核自检；评分脚本不评分 Buddy。以下执行记录来自本工作环境，不表示三名组员分别在各自电脑上完成了相同操作。
+> 当前状态：物理页初始化、Best-Fit、Buddy System 和简化版 SLUB 对象分配器已完成；`make grade` 的 Page Init 与 Best-Fit 两项均为 OK，总分 20/20。Buddy 和 SLUB 有独立的内核自检，评分脚本不评分这两项。以下执行记录来自本工作环境，不表示三名组员分别在各自电脑上完成了相同操作。
 
 ## 实验基本信息
 
@@ -100,6 +100,7 @@ check_alloc_page：执行 best_fit_check 的断言自检
 | 分配任务一：First-Fit 思考题 | 解释四个核心函数、块首元数据、分配与合并，并分析改进空间 | [`prompt.md` 任务一](./prompt.md#任务一first-fit-阅读提示词)为事后拟写；本报告给出源码分析。 |
 | 分配任务二：Best-Fit | 符合 `pmm_manager` 接口、选最小可用块、拆分、地址有序释放与双向合并，保留原检查函数 | [`prompt.md` 任务二](./prompt.md#任务二best-fit-实现提示词)为事后拟写；当前代码和本地评分已验证。 |
 | 分配任务三：Buddy System | 生成独立管理器和测试，按二次幂拆分与真正伙伴合并，能编译运行 | [`prompt.md` 任务三 A/B](./prompt.md#任务三buddy-system-实现与测试提示词)为整理后的示例；`buddy_pmm.c` 已实现并通过独立 QEMU 自检。 |
+| 扩展 Challenge：SLUB | 基于页分配实现任意正大小对象申请与释放，并编写测试 | 下文和 [`prompt.md` 扩展任务 A/B](./prompt.md#扩展任务-challengeslub-实现与测试提示词)为整理后的示例；`slub.c` 已实现，在 Best-Fit 和 Buddy 两种页分配器下通过 QEMU 自检。 |
 
 此表把**拟写的 prompt**与**实际实现证据**分开；不能把事后设计稿写成当时发送给 AI 的原始消息。
 
@@ -182,7 +183,29 @@ free_end = ROUNDDOWN(mem_base + mem_size, PGSIZE)
 | 空闲页不足或虽有总量但无足够大的块 | 验证失败返回、无越界写入及计数保持不变。 |
 | 多轮分配与释放后恢复初始空闲页数 | 检验状态维护和重复使用的稳定性。 |
 
-`buddy_check()` 已覆盖非二次幂且未对齐的 14 页初始化、跨阶申请、拆分、只有真正伙伴才能合并、空闲总量足够但没有足够大块时返回失败，以及释放后空闲页数恢复。重复释放、越界输入、并发和性能仍未在本次自检中覆盖。扩展 Challenge 的 SLUB 对象分配器及其两份提示词未实施，本报告不将其计入已完成部分。
+`buddy_check()` 已覆盖非二次幂且未对齐的 14 页初始化、跨阶申请、拆分、只有真正伙伴才能合并、空闲总量足够但没有足够大块时返回失败，以及释放后空闲页数恢复。重复释放、越界输入、并发和性能仍未在本次自检中覆盖。
+
+### 扩展 Challenge：简化版 SLUB 对象分配
+
+实现位于 [`slub.c`](../code/kern/mm/slub.c) 和 [`slub.h`](../code/kern/mm/slub.h)，在 `pmm_init()` 后初始化并运行 `slub_check()`。底层仍由当前 `pmm_manager` 提供物理页；页内按 16 至 2048 字节的八个大小类管理对象。每个 slab 页头保存大小类、空闲对象链、已分配位图和对象计数；空闲链指针只写入空槽，已分配槽由调用者使用。最后一个对象释放后整页交还给页分配器。大于 2048 字节的请求改用连续物理页，页头记录页数，`slub_free()` 据此回收。申请 0 字节返回 `NULL`，释放 `NULL` 无操作；返回地址按 16 字节对齐。
+
+本任务整理的两份提示词如下，均为**可复用的事后设计稿**；本次真实用户请求是“完成一下slub部分”，不能将下列文字写成曾逐字发送的对话。相同内容也收录在 [`prompt.md`](./prompt.md#扩展任务-challengeslub-实现与测试提示词)。
+
+**提示词 A：生成模块并接入内核**
+
+```text
+请阅读 uCore 的 pmm.h、memlayout.h、pmm.c、kern/init/init.c 和当前 Makefile，从零实现简化版内核 SLUB 对象分配器。第一层复用 alloc_page/alloc_pages 与 free_page/free_pages；第二层在页内按 16、32、64、128、256、512、1024、2048 字节建立对象缓存，提供 slub_init、slub_alloc(size)、slub_free(ptr)。任意正大小都应可申请；超过最大小对象类时直接分配足够的连续页，并在页头保存释放所需元数据。返回地址至少 16 字节对齐，size=0 返回 NULL，释放 NULL 无操作。
+请说明页头、空闲对象链、已分配位图及大对象元数据的布局，避免把已分配对象内容当作链表指针；释放对象时核对所属页、对象边界和状态，空 slab 应归还物理页。保留现有 Best-Fit、Buddy、basic_check、best_fit_check 和评分脚本；在 pmm_init 完成后接入 SLUB 初始化与自检。给出可编译代码、内存边界检查、失败路径和 QEMU 验证命令，未执行的检查不得写成通过。
+```
+
+**提示词 B：生成独立测试**
+
+```text
+请为上一步的 SLUB 模块实现独立的 slub_check()，使用内核 assert，不修改课程评分条件。记录测试前后 nr_free_pages()，分别申请 1、16、17、63、128、513、2048、2049、4096、8192 字节，检查非 NULL、16 字节对齐、首尾字节可读写和不同对象互不覆盖；逆序释放后检查空闲页数恢复。继续申请超过单页容量的同一小对象类，验证新 slab 创建；交错释放后检查所有空 slab 归还。测试 size=0 和 free(NULL)，并分别在默认 Best-Fit 与可选 Buddy 页分配器下启动 QEMU。
+解释这些测试对应的大小类边界、跨页回退、对象隔离及页回收错误。对于重复释放、任意无效指针、并发和性能等未运行的测试，只说明限制，不得声称通过。
+```
+
+`slub_check()` 的大小类边界测试可发现错误的类选择；对不同对象写入首尾字节可发现重叠和容量不足；260 个 16 字节对象跨过单页容量，验证 slab 扩容与交错释放；前后空闲页数一致验证小 slab 和大对象页回收。释放时用位图断言阻止已释放槽再次释放，但自检未故意触发 panic；任意非法地址、并发与性能也未测试。这是无锁、单核启动阶段的教学实现。
 
 ### 启动兼容调整
 
@@ -213,6 +236,7 @@ free_end = ROUNDDOWN(mem_base + mem_size, PGSIZE)
 | `kern/mm/pmm.c` | 建立描述符、标记保留页、选择分配器并启动自检 | 输出 `best_fit_pmm_manager` 与自检成功消息 |
 | `kern/mm/best_fit_pmm.c` | 管理空闲块、分配和回收连续物理页 | 自检断言全部通过 |
 | `kern/mm/buddy_pmm.c` | 按二次幂阶管理空闲块、拆分和伙伴合并 | 选择 Buddy 时独立自检通过 |
+| `kern/mm/slub.c` | 在物理页上提供小对象缓存和大对象页回退 | 两种页分配器下均打印 `slub_check() succeeded!` |
 | `tools/inject.py`、`tools/test_lab2.c`、`tools/grade.sh` | 在临时副本注入测试并核对输出 | 本地评分 20/20 |
 
 ---
@@ -240,7 +264,7 @@ make -j2 DEFS=-DUSE_BUDDY_PMM
 timeout 15s qemu-system-riscv64 -machine virt -nographic -bios default -kernel bin/ucore.img
 ```
 
-关键输出为 `memory management: buddy_pmm_manager`、`buddy_check() succeeded!` 和 `check_alloc_page() succeeded!`。申请 `n` 页实际占用向上取整到 `2^order` 页，`nr_free_pages()` 按实际占用量减少；释放时应传入原请求页数，块首 `property` 记录实际阶块大小。切回默认 Best-Fit 时再次执行 `make clean && make -j2`。
+关键输出为 `memory management: buddy_pmm_manager`、`buddy_check() succeeded!`、`check_alloc_page() succeeded!` 和 `slub_check() succeeded!`。申请 `n` 页实际占用向上取整到 `2^order` 页，`nr_free_pages()` 按实际占用量减少；释放时应传入原请求页数，块首 `property` 记录实际阶块大小。切回默认 Best-Fit 时再次执行 `make clean && make -j2`，其 QEMU 输出也包含 `slub_check() succeeded!`。
 
 单文件编译与完整 `make -j2` 均成功，生成 `bin/kernel` 和 `bin/ucore.img`。`make grade` 会清理开发目录的构建产物，并在 `/tmp/lab2_grade` 临时副本中注入测试、重新构建和启动；评分后若要再次执行 `make qemu`，须重新构建。内核初始化后进入常驻循环，所以上面的 QEMU 命令由 `timeout` 在 5 秒后停止，其退出码 124 是预期的限时停止。
 
@@ -254,6 +278,7 @@ timeout 15s qemu-system-riscv64 -machine virt -nographic -bios default -kernel b
 | 两个模块单独编译 | `pmm.o` 与 `best_fit_pmm.o` 均成功 | [实验记录](../实验记录.md)；本次截图没有单独显示这两条命令 |
 | 全量构建 | 生成 `bin/kernel`、`bin/ucore.img` | 图 9 |
 | QEMU 自检 | 读取 128 MB RAM，选择 Best-Fit，打印自检成功 | 图 10 |
+| SLUB 自检 | 默认 Best-Fit 与可选 Buddy 两种构建均打印 `slub_check() succeeded!` | 本次 WSL/QEMU 终端输出；原有截图未包含 SLUB |
 | 本地评分 | Page Init 与 Best-Fit 均为 `OK`，20/20 | 图 11 |
 
 ### 5.2 QEMU 启动与自检
@@ -316,7 +341,7 @@ Total Score: 20/20
 1. **内存边界决定可分配范围。** 设备树给出 RAM 范围，链接符号 `end` 给出内核占用范围，页描述符数组还会消耗物理内存。只有这些区域之后的完整页才能加入空闲链表。
 2. **Best-Fit 依赖准确的块元数据。** 块首长度、空闲页计数和按地址排序的链表必须同步维护；拆分或合并后若有一项错误，后续分配可能重叠、遗漏或错误报告可用页数。
 3. **启动映射是内存管理的前提。** 内核尚未运行到 `page_init()` 时，页表切换和镜像装载就可能使执行中断。通过对照 OpenSBI 入口、QEMU 指令轨迹和页表内容，才能将启动故障与分配器故障区分开。
-4. **自检与评分各有边界。** 内核断言验证给定分配序列，评分脚本检查特定初始化状态和输出；20/20 表示原有 Page Init 与 Best-Fit 检查通过，Buddy 另由 QEMU 自检验证，不代表已经评估性能、并发访问或所有边界输入。
+4. **自检与评分各有边界。** 内核断言验证给定分配序列，评分脚本检查特定初始化状态和输出；20/20 表示原有 Page Init 与 Best-Fit 检查通过，Buddy 和 SLUB 另由 QEMU 自检验证，不代表已经评估性能、并发访问或所有边界输入。
 
 ### AI 协作开发的经验
 
@@ -328,6 +353,7 @@ Total Score: 20/20
 - [x] QEMU 启动并打印 `check_alloc_page() succeeded!`。
 - [x] 本地 `make grade` 的 Page Init 与 Best-Fit 均为 OK，总分 20/20。
 - [x] 实现并运行 Buddy System 模块与独立自检；评分脚本不包含 Buddy 项。
+- [x] 实现并运行简化版 SLUB 对象分配模块与独立自检；评分脚本不包含 SLUB 项。
 - [ ] 小组核对成员信息、实际分工、个人操作和 AI 使用记录。
 - [x] 将现有真实源码与终端截图放入报告对应位置，并核对图片路径。
 - [ ] 若课程要求，补充完整对话导出、仓库提交号及指定模板内容；核对现有 `prompt.md` 的账号和模型信息。

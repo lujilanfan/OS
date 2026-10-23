@@ -27,6 +27,24 @@
 请只阅读、不修改 kern/mm/default_pmm.c，并结合 memlayout.h 的 Page/free_area_t 和 libs/list.h 的双向链表，分别解释 default_init、default_init_memmap、default_alloc_pages、default_free_pages。用两个不同大小的空闲块示例追踪 free_list、块首 property、PG_property、nr_free 的变化，说明为何 First-Fit 取第一个足够大的块，以及按地址排列如何帮助回收合并。最后分析查找成本、外部碎片和可改进方案，区分代码事实与推测。
 ```
 
+# 扩展任务 Challenge：SLUB 实现与测试提示词
+
+以下两段是根据实验要求整理的可复用示例，并非本次对话中逐字发送的提问。
+
+**A. 模块生成与接入提示词：**
+
+```text
+请阅读 uCore 的 pmm.h、memlayout.h、pmm.c、kern/init/init.c 和当前 Makefile，从零实现简化版内核 SLUB 对象分配器。第一层复用 alloc_page/alloc_pages 与 free_page/free_pages；第二层在页内按 16、32、64、128、256、512、1024、2048 字节建立对象缓存，提供 slub_init、slub_alloc(size)、slub_free(ptr)。任意正大小都应可申请；超过最大小对象类时直接分配足够的连续页，并在页头保存释放所需元数据。返回地址至少 16 字节对齐，size=0 返回 NULL，释放 NULL 无操作。
+请说明页头、空闲对象链、已分配位图及大对象元数据的布局，避免把已分配对象内容当作链表指针；释放对象时核对所属页、对象边界和状态，空 slab 应归还物理页。保留现有 Best-Fit、Buddy、basic_check、best_fit_check 和评分脚本；在 pmm_init 完成后接入 SLUB 初始化与自检。给出可编译代码、内存边界检查、失败路径和 QEMU 验证命令，未执行的检查不得写成通过。
+```
+
+**B. 独立测试生成提示词：**
+
+```text
+请为上一步的 SLUB 模块实现独立的 slub_check()，使用内核 assert，不修改课程评分条件。记录测试前后 nr_free_pages()，分别申请 1、16、17、63、128、513、2048、2049、4096、8192 字节，检查非 NULL、16 字节对齐、首尾字节可读写和不同对象互不覆盖；逆序释放后检查空闲页数恢复。继续申请超过单页容量的同一小对象类，验证新 slab 创建；交错释放后检查所有空 slab 归还。测试 size=0 和 free(NULL)，并分别在默认 Best-Fit 与可选 Buddy 页分配器下启动 QEMU。
+解释这些测试对应的大小类边界、跨页回退、对象隔离及页回收错误。对于重复释放、任意无效指针、并发和性能等未运行的测试，只说明限制，不得声称通过。
+```
+
 # Lab2 实际对话记录
 
 
