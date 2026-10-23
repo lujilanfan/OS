@@ -1,8 +1,46 @@
-# Lab2 实际提示词与对话工作记录
+# 任务二：Best-Fit 实现提示词（事后拟写）
 
-本文件参照 [Lab1 的 `prompt.md`](https://github.com/lujilanfan/OS/blob/lab1/report/prompt.md) 编排，记录**本次对话中实际出现的用户提问**，并简述 Codex 随后的处理和验证。下列 `P1`—`P13` 引用块保留用户文字原貌，包括原有笔误与路径称呼；“目的”“结果”等字段及末尾工作链是整理说明，**不是助手答复的逐字转录**。消息的精确发送时间未保存；本文件编写日期为 2026-10-21。文中 `lab2/code/`、`lab2/report/` 是当时工作区的历史路径，本分支现将对应内容放在根目录的 `code/`、`report/`。
+本节为事后拟写的可复用提示词，不是已发生的 AI 对话；真实对话记录见后文。
 
-本次使用的是 Codex 桌面应用，具体底层模型名称应由实际使用者从当时的界面或对话导出核对。本文件对应一个工作会话，不代表三位组员各有一份相同的 AI 对话或分别执行了代码修改。若课程要求全部“提问—答复—测试—追问”原文及工具输出，应由账号实际使用者导出完整会话补交；不能把下面的摘要当成完整逐字转录。
+```text
+请阅读初始 kern/mm/best_fit_pmm.c 的 lab2 function2-2 YOUR CODE 标记、kern/mm/default_pmm.c、pmm.h 的 pmm_manager 接口和 memlayout.h 的 Page/free_area_t。实现 Best-Fit 的 init、init_memmap、alloc_pages、free_pages、nr_free_pages、check 回调及 best_fit_pmm_manager，并在 pmm.c 中切换管理器。
+空闲块按地址排序，nr_free 记录页数，块首 property 记录长度并带 PG_property。分配时扫描足够大的块并选最小者，按需拆分；释放时按地址插入并与前后相邻块合并。不得修改 basic_check()、best_fit_check() 和评分测试。先解释不变量，再给最小改动和可运行的编译/QEMU 命令；未执行的测试不得写成通过。
+```
+
+当前 Best-Fit 源码和 20/20 评分有独立的实际记录；不能据此倒推上面这段文字曾被发送给 AI。
+
+# 任务三：Buddy System 实现与测试提示词（事后拟写）
+
+**A. 模块生成与接入提示词：**
+
+```text
+请参考现有 uCore 的 pmm.h、memlayout.h、default_pmm.c、best_fit_pmm.c 和 Makefile，从零生成 Buddy System 分配模块。初始框架没有 Buddy 文件。空闲块大小为 2^order 页；用各阶链表和页描述符元数据管理任意长度、非二次幂的初始可用区。申请 n 页时选择最小可容纳阶，必要时逐级拆分；释放时依据分配时记录的实际阶数回收，并且只合并同阶、空闲、未越界的真正伙伴。
+请先说明 alloc_pages(n)/free_pages(base,n) 接口中请求页数与实际占用整阶页数如何对应、内部碎片如何计数，以及多段初始化和元数据生命周期，再给出最小代码与构建改动。不要改已有检查函数或评分脚本。提供单独选择 Buddy、自检及恢复 Best-Fit 为默认管理器的步骤。只报告真正运行过的输出。
+```
+
+**B. 独立测试生成提示词：**
+
+```text
+请针对上一步生成的 Buddy 模块写独立断言测试，不要修改 basic_check()、best_fit_check()、tools/test_lab2.c 或评分匹配条件。先列出测试的初始状态、操作序列、预期地址/阶数/空闲页计数及失败定位信息，再实现测试函数。
+至少覆盖非二次幂初始区间与对齐边界、1 页和整块及跨阶申请、连续拆分、真正伙伴释放后的逐级合并、相邻但非伙伴不得合并、空闲不足和无法形成足够大连续块的失败、重复释放与越界防护、多轮操作后页数恢复。解释各用例能发现的错误以及未覆盖的并发和性能风险。给出构建与 QEMU 命令；未运行时不得宣称通过。
+```
+
+当前仓库尚无 Buddy 模块和测试；A、B 均是拟写稿，未实际发送或运行。SLUB 是选做 Challenge，本次没有其实现或测试。
+
+# 任务一：First-Fit 阅读提示词（事后拟写）
+
+```text
+请只阅读、不修改 kern/mm/default_pmm.c，并结合 memlayout.h 的 Page/free_area_t 和 libs/list.h 的双向链表，分别解释 default_init、default_init_memmap、default_alloc_pages、default_free_pages。用两个不同大小的空闲块示例追踪 free_list、块首 property、PG_property、nr_free 的变化，说明为何 First-Fit 取第一个足够大的块，以及按地址排列如何帮助回收合并。最后分析查找成本、外部碎片和可改进方案，区分代码事实与推测。
+```
+
+阅读结论与改进权衡见 report.md；这里不是虚构的原始 AI 答复。
+
+# Lab2 实际对话记录
+
+
+本节参照 [Lab1 的 `prompt.md`](https://github.com/lujilanfan/OS/blob/lab1/report/prompt.md) 编排，记录**本次对话中实际出现的用户提问**，并简述 Codex 随后的处理和验证。下列 `P1`—`P13` 引用块保留用户文字原貌，包括原有笔误与路径称呼；“目的”“结果”等字段及末尾工作链是整理说明，**不是助手答复的逐字转录**。消息的精确发送时间未保存；本节最初编写于 2026-10-21。文中 `lab2/code/`、`lab2/report/` 是当时工作区的历史路径，本分支现将对应内容放在根目录的 `code/`、`report/`。
+
+本次使用的是 Codex 桌面应用，具体底层模型名称应由实际使用者从当时的界面或对话导出核对。本节对应一个工作会话，不代表三位组员各有一份相同的 AI 对话或分别执行了代码修改。若课程要求全部“提问—答复—测试—追问”原文及工具输出，应由账号实际使用者导出完整会话补交；不能把下面的摘要或文件顶部的拟写示例当成完整逐字转录。
 
 ## P1：读取 Lab2 并识别任务
 
