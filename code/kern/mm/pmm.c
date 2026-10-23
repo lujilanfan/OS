@@ -61,7 +61,7 @@ size_t nr_free_pages(void) {
     return pmm_manager->nr_free_pages();
 }
 
-//lab2 function1 YOUR CODE
+//lab2 function1 2412932
 // Initialize one descriptor for every page at or above DRAM_BASE. Pages used
 // by the firmware, kernel, and descriptor array remain reserved.
 static void page_init(void) {
