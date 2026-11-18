@@ -81,6 +81,7 @@ void kernel_thread_entry(void);
 void forkrets(struct trapframe *tf);
 void switch_to(struct context *from, struct context *to);
 
+// lab4 function2 2410718
 // alloc_proc - allocate a process control block and initialize every field.
 static struct proc_struct *
 alloc_proc(void)
@@ -166,6 +167,7 @@ get_pid(void)
     return last_pid;
 }
 
+// lab4 function3 2410764
 // proc_run - switch from current to proc, including the active page table.
 void
 proc_run(struct proc_struct *proc)
@@ -243,6 +245,7 @@ put_kstack(struct proc_struct *proc)
     free_pages(kva2page((void *)(proc->kstack)), KSTACKPAGE);
 }
 
+// lab4 function2 2410718
 // kernel_thread - construct a temporary trap frame for a new kernel thread.
 int
 kernel_thread(int (*fn)(void *), void *arg, uint32_t clone_flags)
@@ -258,6 +261,7 @@ kernel_thread(int (*fn)(void *), void *arg, uint32_t clone_flags)
     return do_fork(clone_flags | CLONE_VM, 0, &tf);
 }
 
+// lab4 function2 2410718
 // copy_mm - Lab4 kernel threads share the kernel address space.
 static int
 copy_mm(uint32_t clone_flags, struct proc_struct *proc)
@@ -268,6 +272,7 @@ copy_mm(uint32_t clone_flags, struct proc_struct *proc)
     return 0;
 }
 
+// lab4 function2 2410718
 // copy_thread - place the child's trap frame at the top of its kernel stack
 // and arrange for its first context switch to enter forkret.
 static void
@@ -282,6 +287,7 @@ copy_thread(struct proc_struct *proc, uintptr_t stack, struct trapframe *tf)
     proc->context.sp = (uintptr_t)proc->tf;
 }
 
+// lab4 function2 2410718
 // do_fork - create a child, publish it atomically, then make it runnable.
 int
 do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
@@ -353,6 +359,7 @@ init_main(void *arg)
     return 0;
 }
 
+// lab4 function2 2410718
 // proc_init - create the idle process and the first runnable kernel thread.
 void
 proc_init(void)
@@ -387,6 +394,7 @@ proc_init(void)
     assert(initproc != NULL && initproc->pid == 1);
 }
 
+// lab4 function3 2410764
 // cpu_idle - let runnable threads take the processor whenever requested.
 void
 cpu_idle(void)

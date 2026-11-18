@@ -262,6 +262,7 @@ struct Page *get_page(pde_t *pgdir, uintptr_t la, pte_t **ptep_store)
     return NULL;
 }
 
+// lab4 function1 2412932
 // page_remove_pte - remove a valid mapping and release its physical page when
 // the final mapping reference disappears.
 static inline void
@@ -279,6 +280,7 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep)
     }
 }
 
+// lab4 function1 2412932
 // page_remove - remove the mapping at la when one exists.
 void
 page_remove(pde_t *pgdir, uintptr_t la)
@@ -290,6 +292,7 @@ page_remove(pde_t *pgdir, uintptr_t la)
     }
 }
 
+// lab4 function1 2412932
 // page_insert - map page at la, replacing any previous mapping.
 int
 page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm)
@@ -317,6 +320,7 @@ page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm)
     return 0;
 }
 
+// lab4 function1 2412932
 // pgdir_alloc_page - allocate one physical page and establish its mapping.
 struct Page *
 pgdir_alloc_page(pde_t *pgdir, uintptr_t la, uint32_t perm)
