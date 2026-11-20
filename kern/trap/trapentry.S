@@ -3,6 +3,8 @@
     .macro SAVE_ALL
     .align 2
 
+    /* 陷入时先保存原 sp，再在当前内核栈分配 Trap frame。
+       32 个通用寄存器槽加 4 个 CSR 槽，布局和 trap.h 一致。 */
     csrw sscratch, sp
 
     addi sp, sp, -36 * REGBYTES
@@ -56,6 +58,7 @@
     .endm
 
     .macro RESTORE_ALL
+    /* sp 此时是 Trap frame 基址。槽位 32 保存 sstatus，槽位 33 保存 sepc。 */
     LOAD  s1,32*REGBYTES(sp)
     LOAD  s2,33*REGBYTES(sp)
     csrw  sstatus, s1
@@ -91,7 +94,7 @@
     LOAD  x29,29*REGBYTES(sp)
     LOAD  x30,30*REGBYTES(sp)
     LOAD  x31,31*REGBYTES(sp)
-    # The old stack pointer is restored last because sp is the frame base.
+    /* 最后才恢复 x2（sp），前面的 LOAD 都需要用当前 sp 找到 Trap frame。 */
     LOAD  x2,2*REGBYTES(sp)
     .endm
 
@@ -99,6 +102,7 @@
 __alltraps:
     SAVE_ALL
 
+    /* 真正发生 Trap 时把栈上的现场传给 C 层。新线程的 forkrets 跳过这段保存与分发。 */
     move a0, sp
     call trap
     # sp should be the same as before "jal trap"
@@ -106,11 +110,12 @@ __alltraps:
     .globl __trapret
 __trapret:
     RESTORE_ALL
-    # go back from supervisor call
+    /* sret 按 sepc 恢复执行位置，并用 SPP、SPIE 恢复特权级和中断状态。 */
     sret
 
     .globl forkrets
 forkrets:
-    # set stack to this new process's trapframe
+    /* forkret 通过 a0 传入 current->tf。把它设为栈基址，复用 Trap 返回流程，
+       新线程的 sepc 已指向 kernel_thread_entry。 */
     move sp, a0
     j __trapret

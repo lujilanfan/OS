@@ -24,7 +24,8 @@
 // |       PPN[1]        |      PPN[0]     |Reserved|D|A|G|U|X|W|R|V|
 // +---------12----------+-----------------+--------+---------------+
 
-// page directory index
+// 当前 Lab4 使用 Sv39，根表、中间表、末级表分别取虚拟地址的 [38:30]、[29:21]、[20:12]。
+// 低 12 位为 4 KiB 页内偏移，每个 9 位索引都能定位一张表中的 512 个槽位。
 #define PDX1(la) ((((uintptr_t)(la)) >> PDX1SHIFT) & 0x1FF)
 #define PDX0(la) ((((uintptr_t)(la)) >> PDX0SHIFT) & 0x1FF)
 

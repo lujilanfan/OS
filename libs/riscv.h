@@ -207,6 +207,7 @@
 
 #ifdef __GNUC__
 
+// csrr 读取 CSR。local_intr_save 用它读取 sstatus，并检查全局中断使能位。
 #define read_csr(reg) ({ unsigned long __tmp; \
   asm volatile ("csrr %0, " #reg : "=r"(__tmp)); \
   __tmp; })
@@ -217,6 +218,7 @@
   asm volatile ("csrrw %0, " #reg ", %1" : "=r"(__tmp) : "rK"(val)); \
   __tmp; })
 
+// CSRRS 仅置位掩码中的位，CSRRC 仅清除掩码中的位。两者均返回旧 CSR 值。
 #define set_csr(reg, bit) ({ unsigned long __tmp; \
   asm volatile ("csrrs %0, " #reg ", %1" : "=r"(__tmp) : "rK"(bit)); \
   __tmp; })

@@ -13,4 +13,4 @@ make qemu
 
 `make grade` 会把 `tools/test_lab4.c` 注入临时副本，不会在正式内核源码中保留测试调用。当前三项检查的结果为 PMM、Process Create、Schedule 全部通过，总分 `30/30`。具体实现、测试条件与结果解释见 [`report/report.md`](./report/report.md)。
 
-`init_main` 输出完成后会进入框架中的 `do_exit` 占位函数并转入内核监视器；本实验要求的页表操作、内核线程创建和调度结果在此之前已经输出并由评分脚本检查。
+`init_main` 正常返回后，`do_exit` 打印退出码并将线程置为 `PROC_ZOMBIE`。普通启动会切回 idle，随后由原有的定时器逻辑自动关闭 QEMU。

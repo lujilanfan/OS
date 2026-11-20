@@ -9,14 +9,13 @@
 //pre define
 struct mm_struct;
 
-// the virtual continuous memory area(vma), [vm_start, vm_end),
-// addr belong to a vma means  vma.vm_start<= addr <vma.vm_end
+// 一个 VMA 描述连续虚拟地址区间 [vm_start, vm_end)，便于按区间管理地址空间。
 struct vma_struct {
-    struct mm_struct *vm_mm; // the set of vma using the same PDT
-    uintptr_t vm_start;      // start addr of vma
-    uintptr_t vm_end;        // end addr of vma, not include the vm_end itself
-    uint32_t vm_flags;       // flags of vma
-    list_entry_t list_link;  // linear list link which sorted by start addr of vma
+    struct mm_struct *vm_mm; // 所属地址空间，由 insert_vma_struct 设置。
+    uintptr_t vm_start;      // 区间起点，包含在 VMA 内。
+    uintptr_t vm_end;        // 区间终点，不包含在 VMA 内。
+    uint32_t vm_flags;       // 区间的读、写、执行等属性。
+    list_entry_t list_link;  // 插入所属 mm 的有序 VMA 链表时使用的节点。
 };
 
 #define le2vma(le, member)                  \
@@ -26,13 +25,13 @@ struct vma_struct {
 #define VM_WRITE                0x00000002
 #define VM_EXEC                 0x00000004
 
-// the control struct for a set of vma using the same PDT
+// 一个地址空间的软件描述，记录其虚拟区间以及根页表指针。
 struct mm_struct {
-    list_entry_t mmap_list;        // linear list link which sorted by start addr of vma
-    struct vma_struct *mmap_cache; // current accessed vma, used for speed purpose
-    pde_t *pgdir;                  // the PDT of these vma
-    int map_count;                 // the count of these vma
-    void *sm_priv;                 // the private data for swap manager
+    list_entry_t mmap_list;        // VMA 循环双向链表的哨兵头，按 vm_start 递增排列。
+    struct vma_struct *mmap_cache; // 最近一次 find_vma 查到的区间，用于复用相邻地址查询。
+    pde_t *pgdir;                  // 根页表的内核虚拟指针，mm_create 初始设为 NULL。
+    int map_count;                 // 已挂入链表的 VMA 数量。
+    void *sm_priv;                 // 交换管理器的私有数据指针，本实验初始化为空。
 };
 
 struct vma_struct *find_vma(struct mm_struct *mm, uintptr_t addr);

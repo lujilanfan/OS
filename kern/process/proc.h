@@ -6,20 +6,21 @@
 #include <trap.h>
 #include <memlayout.h>
 
-// process's state in his life cycle
+// Lab4 直接用 current 区分哪个可运行线程正在 CPU 上执行。
 enum proc_state
 {
-    PROC_UNINIT = 0, // uninitialized
-    PROC_SLEEPING,   // sleeping
-    PROC_RUNNABLE,   // runnable(maybe running)
-    PROC_ZOMBIE,     // almost dead, and wait parent proc to reclaim his resource
+    PROC_UNINIT = 0, // PCB 已分配，创建流程尚未把它置为可运行。
+    PROC_SLEEPING,   // 等待事件，调度器会跳过。
+    PROC_RUNNABLE,   // 可运行，包含就绪和已经在 CPU 上运行两种情形。
+    PROC_ZOMBIE,     // 线程已退出，调度器跳过，PCB 和内核栈留待回收。
 };
 
+// switch.S 依照这里的顺序处理 14 个寄存器槽位。新线程的 ra 和 sp 由 copy_thread 设置。
 struct context
 {
-    uintptr_t ra;
-    uintptr_t sp;
-    uintptr_t s0;
+    uintptr_t ra; // ret 使用的地址。旧线程存调用后的续执行位置，新线程存 forkret。
+    uintptr_t sp; // 线程切换时的栈指针。
+    uintptr_t s0; // s0 至 s11 为 RISC-V 调用约定中由被调用者保存的寄存器。
     uintptr_t s1;
     uintptr_t s2;
     uintptr_t s3;
@@ -41,22 +42,23 @@ extern list_entry_t proc_list;
 
 struct proc_struct
 {
-    enum proc_state state;        // Process state
-    int pid;                      // Process ID
-    int runs;                     // the running times of Proces
-    uintptr_t kstack;             // Process kernel stack
-    volatile bool need_resched;   // bool value: need to be rescheduled to release CPU?
-    struct proc_struct *parent;   // the parent process
-    struct mm_struct *mm;         // Process's memory management field
-    struct context context;       // Switch here to run process
-    struct trapframe *tf;         // Trap frame for current interrupt
-    uintptr_t pgdir;              // the base addr of Page Directroy Table(PDT)
-    uint32_t flags;               // Process flag
-    char name[PROC_NAME_LEN + 1]; // Process name
-    list_entry_t list_link;       // Process link list
-    list_entry_t hash_link;       // Process hash list
+    enum proc_state state;       // 调度状态，由 schedule 用于筛选。
+    int pid;                     // 进程编号。-1 表示未分配，0 专用于 idle。
+    int runs;                    // 被 schedule 选中的次数，包括继续运行同一线程。
+    uintptr_t kstack;            // 独立内核栈的起始虚拟地址，idle 使用 bootstack。
+    volatile bool need_resched;  // 当前执行流是否请求重新调度。
+    struct proc_struct *parent;  // 创建者的 PCB，idle 无父进程。
+    struct mm_struct *mm;        // 独立地址空间的描述符。Lab4 的内核线程为 NULL。
+    struct context context;      // switch_to 使用的调度上下文。
+    struct trapframe *tf;        // 通用寄存器及 Trap 相关 CSR 的现场，新线程也用它启动。
+    uintptr_t pgdir;             // 根页表物理地址，内核线程用 boot_pgdir_pa。
+    uint32_t flags;              // 进程标志，alloc_proc 初始置 0。
+    char name[PROC_NAME_LEN + 1]; // 最多 15 个名称字节，另外预留一个结束符。
+    list_entry_t list_link;      // 挂在全局 proc_list 中，供遍历和调度。
+    list_entry_t hash_link;      // 挂在 PID 哈希桶内，供按 PID 查找。
 };
 
+// 从 PCB 内嵌的链表节点地址减去成员偏移，取回 PCB 的地址。
 #define le2proc(le, member) \
     to_struct((le), struct proc_struct, member)
 

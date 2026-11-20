@@ -35,13 +35,13 @@ int kern_init(void)
     pic_init(); // init interrupt controller
     idt_init(); // init interrupt descriptor table
 
-    vmm_init();  // init virtual memory management
-    proc_init(); // init process table
+    vmm_init();  // 检查 VMA 链表的插入、排序和按地址查找。
+    proc_init(); // 初始化进程链表和 PID 哈希桶。登记 idle，创建 init，但此时还未运行 init_main。
 
-    clock_init();  // init clock interrupt
-    intr_enable(); // enable irq interrupt
+    clock_init();  // 设置定时器并允许 S 态定时器中断源。
+    intr_enable(); // 置位本 hart 的 sstatus.SIE，打开 S 态全局中断。
 
-    cpu_idle(); // run idle process
+    cpu_idle(); // 进入 idle 循环。idle 的 need_resched 已置位，接下来会调用 schedule。
 }
 
 static void

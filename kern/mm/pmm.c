@@ -208,15 +208,12 @@ void pmm_init(void)
     kmalloc_init();
 }
 
-// get_pte - get pte and return the kernel virtual address of this pte for la
-//        - if the PT contians this pte didn't exist, alloc a page for PT
-// parameter:
-//  pgdir:  the kernel virtual base address of PDT
-//  la:     the linear address need to map
-//  create: a logical value to decide if alloc a page for PT
-// return vaule: the kernel virtual address of this pte
+// 沿 Sv39 的三级页表查找 la 对应的末级 PTE 槽位，用于处理 4 KiB 页映射。
+// pgdir 是根页表的内核虚拟指针。create 只决定缺失时能否分配中间页表。
+// 返回槽位地址时，槽位本身可以仍为空；路径不存在且不创建，或分配失败时返回 NULL。
 pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create)
 {
+    // 第一次下降：用 VPN[2] 选根表项，由它定位中间页表。
     pde_t *pdep1 = &pgdir[PDX1(la)];
     if (!(*pdep1 & PTE_V))
     {
@@ -225,12 +222,15 @@ pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create)
         {
             return NULL;
         }
+        // 父项持有一份引用。新页表清零后，每个子项起初都是无效的。
         set_page_ref(page, 1);
         uintptr_t pa = page2pa(page);
         memset(KADDR(pa), 0, PGSIZE);
-        // Sv39 requires R/W/X/U to be clear in a non-leaf PTE.
+        // 非叶子项写入下一级物理页号，标志仅置 V，R/W/X/U 均保持为 0。
         *pdep1 = ptd_create(page2ppn(page));
     }
+    // 第二次下降：从根表项取下一级的物理地址，经 KADDR 转为可解引用的虚拟地址。
+    // 用 VPN[1] 选中间表项，缺失时按与上一级相同的规则创建末级页表。
     pde_t *pdep0 = &((pte_t *)KADDR(PDE_ADDR(*pdep1)))[PDX0(la)];
     if (!(*pdep0 & PTE_V))
     {
@@ -244,10 +244,11 @@ pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create)
         memset(KADDR(pa), 0, PGSIZE);
         *pdep0 = ptd_create(page2ppn(page));
     }
+    // 末级表仅用 VPN[0] 定位槽位，由 page_insert 等调用者决定写入什么。
     return &((pte_t *)KADDR(PDE_ADDR(*pdep0)))[PTX(la)];
 }
 
-// get_page - get related Page struct for linear address la using PDT pgdir
+// 查 la 对应的数据页描述符。ptep_store 非空时，也把查到的末级槽位地址返回给调用者。
 struct Page *get_page(pde_t *pgdir, uintptr_t la, pte_t **ptep_store)
 {
     pte_t *ptep = get_pte(pgdir, la, 0);
@@ -263,25 +264,25 @@ struct Page *get_page(pde_t *pgdir, uintptr_t la, pte_t **ptep_store)
 }
 
 // lab4 function1 2412932
-// page_remove_pte - remove a valid mapping and release its physical page when
-// the final mapping reference disappears.
+// 解除 la 的一个映射。ptep 指向末级 PTE，pgdir 是所属根表。
+// 数据页引用数反映它还被几个映射持有。最后一份引用消失时才归还数据页。
 static inline void
 page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep)
 {
     if (*ptep & PTE_V)
     {
-        struct Page *page = pte2page(*ptep);
+        struct Page *page = pte2page(*ptep); // 从旧 PTE 的物理页号找到数据页描述符。
         if (page_ref_dec(page) == 0)
         {
             free_page(page);
         }
-        *ptep = 0;
-        tlb_invalidate(pgdir, la);
+        *ptep = 0;                 // 清空槽位，下一次删除此映射会跳过整个分支。
+        tlb_invalidate(pgdir, la); // 硬件已经缓存的旧地址转换也需要失效。
     }
 }
 
 // lab4 function1 2412932
-// page_remove - remove the mapping at la when one exists.
+// 接收虚拟地址并先找末级槽位。删除路径不会为了找一个不存在的映射而分配页表。
 void
 page_remove(pde_t *pgdir, uintptr_t la)
 {
@@ -293,7 +294,7 @@ page_remove(pde_t *pgdir, uintptr_t la)
 }
 
 // lab4 function1 2412932
-// page_insert - map page at la, replacing any previous mapping.
+// 建立或替换 la 对应的映射。这里可补建中间页表，并负责新旧数据页的引用计数。
 int
 page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm)
 {
@@ -303,15 +304,18 @@ page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm)
         return -E_NO_MEM;
     }
 
+    // 先为新映射增加一次引用。若只是同页改权限，下面会抵消这次增加。
     page_ref_inc(page);
     if (*ptep & PTE_V)
     {
         if (pte2page(*ptep) == page)
         {
+            // 仍是同一物理页，只更新权限，避免先撤映射导致误释放。
             page_ref_dec(page);
         }
         else
         {
+            // 新旧物理页不同，先撤掉旧映射，再在同一个槽位写入新 PTE。
             page_remove_pte(pgdir, la, ptep);
         }
     }
@@ -336,12 +340,10 @@ pgdir_alloc_page(pde_t *pgdir, uintptr_t la, uint32_t perm)
 
 
 
-// invalidate a TLB entry, but only if the page tables being
-// edited are the ones currently in use by the processor.
+// 对本 hart 执行按虚拟地址失效的 sfence.vma，未指定 ASID。
+// 当前实现不读取 pgdir 对照 satp，也不负责通知其他 hart。
 void tlb_invalidate(pde_t *pgdir, uintptr_t la)
 {
-    // flush_tlb();
-    // The flush_tlb flush the entire TLB, is there any better way?
     asm volatile("sfence.vma %0" : : "r"(la));
 }
 

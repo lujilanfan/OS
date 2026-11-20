@@ -161,17 +161,19 @@ page_ref_dec(struct Page *page)
     return page->ref;
 }
 
+// 不带地址和 ASID 参数，刷新本 hart 的地址转换缓存。proc_run 在写 satp 后调用。
 static inline void flush_tlb()
 {
     asm volatile("sfence.vma");
 }
 
-// construct PTE from a page and permission bits
+// 将物理页号放进 PPN 字段，并附加有效位及调用者给定的标志。
 static inline pte_t pte_create(uintptr_t ppn, int type)
 {
     return (ppn << PTE_PPN_SHIFT) | PTE_V | type;
 }
 
+// 非叶子项指向下一级页表。只置有效位，不附加叶子项的访问权限。
 static inline pte_t ptd_create(uintptr_t ppn)
 {
     return pte_create(ppn, PTE_V);

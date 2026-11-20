@@ -35,6 +35,7 @@ void clock_init(void) {
     // divided by 100 when using QEMU(10MHz)
     timebase = 1e7 / 100;
     clock_set_next_event();
+    // sie 中这位只允许定时器中断源，kern_init 随后通过 intr_enable 打开全局使能。
     set_csr(sie, MIP_STIP);
 
     // initialize time counter 'ticks' to zero

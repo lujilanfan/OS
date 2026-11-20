@@ -12,6 +12,7 @@
  * */
 uint32_t
 hash32(uint32_t val, unsigned int bits) {
+    // proc_init 准备 2^10 个 PID 桶。哈希取 10 位即可得到 0 到 1023 的桶号。
     uint32_t hash = val * GOLDEN_RATIO_PRIME_32;
     return (hash >> (32 - bits));
 }

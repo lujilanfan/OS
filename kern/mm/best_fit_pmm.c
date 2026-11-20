@@ -11,6 +11,7 @@ static free_area_t free_area;
 
 static void
 best_fit_init(void) {
+    // 物理页分配器自己的空闲块链表。它有独立哨兵，与进程表和 VMA 表分开。
     list_init(&free_list);
     nr_free = 0;
 }

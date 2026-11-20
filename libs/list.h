@@ -39,6 +39,7 @@ static inline void __list_del(list_entry_t *prev, list_entry_t *next) __attribut
  * */
 static inline void
 list_init(list_entry_t *elm) {
+    // 前后指针都指回自身，作为空链表的哨兵时 next == head，直到插入第一个节点。
     elm->prev = elm->next = elm;
 }
 
@@ -78,6 +79,7 @@ list_add_before(list_entry_t *listelm, list_entry_t *elm) {
  * */
 static inline void
 list_add_after(list_entry_t *listelm, list_entry_t *elm) {
+    // 把新节点放在指定节点与其原后继之间。指定节点也可以是哨兵头。
     __list_add(elm, listelm, listelm->next);
 }
 
@@ -120,6 +122,7 @@ list_empty(list_entry_t *list) {
  **/
 static inline list_entry_t *
 list_next(list_entry_t *listelm) {
+    // 循环链表中，最后一个实际节点的后继是哨兵。遍历者据此识别边界。
     return listelm->next;
 }
 
@@ -140,6 +143,7 @@ list_prev(list_entry_t *listelm) {
  * */
 static inline void
 __list_add(list_entry_t *elm, list_entry_t *prev, list_entry_t *next) {
+    // 先把两侧邻居接到新节点，再让新节点双向指回邻居。
     prev->next = next->prev = elm;
     elm->next = next;
     elm->prev = prev;
